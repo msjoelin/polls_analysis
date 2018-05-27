@@ -307,7 +307,7 @@ server <- function(input, output,session) {
              filter(!is.na(Percentage) & Party %in% input$parties & PublYearMonth>=input$startmonthpolls &
                     type %in% input$polltypes & house %in% input$houses) %>%
              ggplot(aes(x=PublYearMonth, y=Percentage, group=Party, color=Party, fill=Party))+
-                geom_point(alpha=0.5)+
+                geom_point(alpha=0.3)+
                 stat_summary(fun.y=mean, geom="line", size=1)+
         geom_dl(aes(label=Party), method=list(dl.combine("first.points"), cex=0.9, size=3))
     } else
