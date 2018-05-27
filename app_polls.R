@@ -16,23 +16,23 @@ library(directlabels)
 library(shiny)
 library(shinydashboard)
 
-########################## STEP1: READ IN AND PREPARE DATA ##########################
+########################## READ IN AND PREPARE DATA ##########################
 
-# Read in data data
+# Read in data data from github rep
 polls<-read.delim("https://raw.githubusercontent.com/hjnilsson/SwedishPolls/master/Data/Polls.csv", header=TRUE, sep=",")
-elections<-read.delim("https://raw.githubusercontent.com/msjoelin/swedish_politic/master/Election.csv", header=TRUE, sep=",")
+elections<-read.delim("https://raw.githubusercontent.com/msjoelin/polls_analysis/master/Election.csv", header=TRUE, sep=",")
 
-# Clean and order poll-data
+# Clean poll-data, put into long format
 polldata<-polls %>% 
   gather(Party, Percentage, c("M", "L", "C", "KD", "S", "V", "MP", "SD", "FI", "Uncertain")) %>%
   select(PublDate, house, Party, Percentage) %>%
-  filter(!(Party %in% c("FI", "Uncertain")) & house != "SVT") %>%
-  mutate(type=ifelse(house %in% c("YouGov", "Inizio", "Sentio", "United Minds"), "Internet", "Classic"), 
-                                block=ifelse(Party %in% c("M", "L", "C", "KD"), "Alliansen", 
+  filter(!(Party %in% c("FI", "Uncertain")) & house != "SVT") %>% # Remove small parties
+  mutate(type=ifelse(house %in% c("YouGov", "Inizio", "Sentio", "United Minds"), "Internet", "Classic"),  # Group polls
+                                block=ifelse(Party %in% c("M", "L", "C", "KD"), "Alliansen",  # Group parties
                                              ifelse(Party=="SD", "SD", 
                                                     ifelse(Party %in% c("MP", "S", "V"), "Rödgröna", "Other"))),
                                 PublYearMonth=as.Date(paste(year(PublDate), str_pad(month(PublDate), 2, pad="0"), "01", sep="-")),
-                                ElectionYear=ifelse(PublYearMonth<="2002-09-15", NA,
+                                ElectionYear=ifelse(PublYearMonth<="2002-09-15", NA, # Add electionyear
                                                     ifelse(PublYearMonth<="2006-09-17", 2006,
                                                            ifelse(PublYearMonth<="2010-09-19", 2010,
                                                                   ifelse(PublYearMonth<="2014-09-14", 2014, 2018)))))
@@ -41,7 +41,7 @@ polldata$PublDate<-as.Date(polldata$PublDate)
 polldata$type<-as.factor(polldata$type)
 
 
-# Clean and order election-data
+# Put electiondata into long format 
 electiondata<-elections %>% 
   gather(Party, Result, c("M", "L", "C", "KD", "S", "V", "MP", "SD"))
 
@@ -55,7 +55,7 @@ polldata<- left_join(polldata, electiondata) %>%
          DiffElection_sign=ifelse(DiffElection>=0, "pos", "neg"))
 
 
-# Create dataset with i overview per hous
+# Create dataset with summary per house
 overview_houses<- polldata %>%
                   group_by(house, type, PublYearMonth) %>% 
                   summarize(NrPolls=n()) %>%
@@ -71,7 +71,8 @@ block_col<-c("Rödgröna"="red","Alliansen"="orange", "SD"="gold", "Other"="grey
 txt_parties<-as.character(unique(polldata$Party))
 txt_houses<-as.character(unique(polldata$house))
 
-################# STEP2: SET DASHBOARD UI  ########################
+
+#################  SET DASHBOARD UI  ########################
 
 ui <- dashboardPage(
   
@@ -99,7 +100,7 @@ ui <- dashboardPage(
       h2("Opinionen per månad"),
       h4("Medelvärde av opinionsundersökningar, grupperad per publiceringsmånad"),
       fluidRow(
-          column(6, 
+          column(5, 
                   checkboxGroupInput(inputId = "parties", inline=TRUE, label="Partier att inkludera i grafen", choices=txt_parties, 
                              selected=txt_parties)),
           column(3, 
@@ -109,7 +110,7 @@ ui <- dashboardPage(
                                                                           selected="2005-01-01"))
       ),
       fluidRow(
-        column(6, 
+        column(5, 
                checkboxGroupInput(inputId = "houses", inline=TRUE, label="Opinionsinstitut att inkludera i grafen", choices=txt_houses, 
                                    selected=txt_houses)),
         column(3, 
@@ -130,7 +131,7 @@ ui <- dashboardPage(
             fluidRow(
               column(3,
                       selectInput("month_bf_elect", "Månader före valet:", unique(polldata$MonthBeforeElection),
-                                                                              selected=5))
+                                                                              selected=4))
               ),
             fluidRow(
               plotOutput(outputId = "polls_deviation")),
@@ -200,6 +201,8 @@ ui <- dashboardPage(
 )
 )
 )
+
+###### DEFINE SERVER FUNCTION #########################
 
 server <- function(input, output,session) {
   
@@ -303,7 +306,8 @@ server <- function(input, output,session) {
               polldata %>%
              filter(!is.na(Percentage) & Party %in% input$parties & PublYearMonth>=input$startmonthpolls &
                     type %in% input$polltypes & house %in% input$houses) %>%
-             ggplot(aes(x=PublYearMonth, y=Percentage, group=Party, color=Party))+
+             ggplot(aes(x=PublYearMonth, y=Percentage, group=Party, color=Party, fill=Party))+
+                geom_point(alpha=0.5)+
                 stat_summary(fun.y=mean, geom="line", size=1)+
         geom_dl(aes(label=Party), method=list(dl.combine("first.points"), cex=0.9, size=3))
     } else
@@ -321,7 +325,7 @@ server <- function(input, output,session) {
       theme(text = element_text(size=14),
       axis.text.x = element_text(angle = 90, hjust = 1))+
       scale_color_manual(values=party_col)+
-      ggtitle("Historiska medelvärden")+
+      ggtitle("Opinionsundersökningar. Linje: Medelvärde. Punkter: Enskilda undersökningar")+
       labs(x = "År / Månad",
            y= "Procent")
   })
