@@ -1,0 +1,12 @@
+name: polls_analysis
+title: polls_analysis
+username:
+account: msjolin
+server: shinyapps.io
+hostUrl: https://api.shinyapps.io/v1
+appId: 349594
+bundleId: 1395213
+url: https://msjolin.shinyapps.io/polls_analysis/
+when: 1527433061.04551
+asMultiple: FALSE
+asStatic: FALSE
