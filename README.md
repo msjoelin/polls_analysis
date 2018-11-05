@@ -1,14 +1,13 @@
-# polls_analysis
+# Election Polls in Sweden
+Analysis and visualization of election polls in Sweden. 
 
-The code produces a shiny-app for analyzing political polls in Sweden. 
+The code produces a shiny-app that visualizes the data, for example 
 - Historical development for parties
-- Comparison between poll houses and performance
-- Visualization of possible party combinations for majority
+- Prediction accuracy (vs election) for different polling institutes
+- Party coalitions 
 
-### Built with
-- RStudio
-- Shiny
-- ShinyDashboard
+### Data
+Data is being pulled from @hjnilsson github
 
 ### Author
 Marcus Sjölin 
@@ -17,4 +16,4 @@ Marcus Sjölin
 
 
 ### Acknowledgement
-@hjnilsson for the underlying data
+@hjnilsson for the data

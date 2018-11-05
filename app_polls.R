@@ -1,4 +1,10 @@
-## Shiny app for analysis of budgets from different parties in the swedish Riksdag ####
+##################################################
+## Project: Polls analysis
+## Script purpose: Shiny app for analysis and visualization of election polls in Sweden
+## Date: 2018-10-01 
+## Author: Marcus Sjölin
+##################################################
+
 
 # Read in necessary libraries
 library("plyr")
@@ -11,24 +17,24 @@ library("ggthemes")
 library("readr")
 library("stringr")
 library(lubridate)
-library(directlabels)
+library(directlabels) # Plotting labels
 
 library(shiny)
 library(shinydashboard)
 
 ########################## READ IN AND PREPARE DATA ##########################
 
-# Read in data data from github rep
+# Read in data
 polls<-read.delim("https://raw.githubusercontent.com/hjnilsson/SwedishPolls/master/Data/Polls.csv", header=TRUE, sep=",")
 elections<-read.delim("https://raw.githubusercontent.com/msjoelin/polls_analysis/master/Election.csv", header=TRUE, sep=",")
 
-# Clean poll-data, put into long format
+# Clean poll-data, put into long format for easier reporting
 polldata<-polls %>% 
   gather(Party, Percentage, c("M", "L", "C", "KD", "S", "V", "MP", "SD", "FI", "Uncertain")) %>%
   select(PublDate, house, Party, Percentage) %>%
-  filter(!(Party %in% c("FI", "Uncertain")) & house != "SVT") %>% # Remove small parties
-  mutate(type=ifelse(house %in% c("YouGov", "Inizio", "Sentio", "United Minds"), "Internet", "Classic"),  # Group polls
-                                block=ifelse(Party %in% c("M", "L", "C", "KD"), "Alliansen",  # Group parties
+  filter(!(Party %in% c("FI", "Uncertain"))) %>% # Remove small parties
+  mutate(type=ifelse(house %in% c("YouGov", "Inizio", "Sentio", "United Minds"), "Internet", "Classic"),  # Group polls into Internet and Classic Polls
+                                block=ifelse(Party %in% c("M", "L", "C", "KD"), "Alliansen",  # Group parties into traditional coalitions
                                              ifelse(Party=="SD", "SD", 
                                                     ifelse(Party %in% c("MP", "S", "V"), "Rödgröna", "Other"))),
                                 PublYearMonth=as.Date(paste(year(PublDate), str_pad(month(PublDate), 2, pad="0"), "01", sep="-")),
@@ -37,11 +43,12 @@ polldata<-polls %>%
                                                            ifelse(PublYearMonth<="2010-09-19", 2010,
                                                                   ifelse(PublYearMonth<="2014-09-14", 2014, 2018)))))
 
+# Set formats
 polldata$PublDate<-as.Date(polldata$PublDate)
 polldata$type<-as.factor(polldata$type)
 
 
-# Put electiondata into long format 
+# Put electiondata into long format
 electiondata<-elections %>% 
   gather(Party, Result, c("M", "L", "C", "KD", "S", "V", "MP", "SD"))
 
@@ -62,7 +69,7 @@ overview_houses<- polldata %>%
                   arrange(desc(type)) %>%
                   filter(PublYearMonth>="2015-01-01")
 
-# Set theme and define color vector
+# Set theme and define color vector for the parties
 old<-theme_set(theme_light())
 party_col<-c("MP"="green","V"="darkred", "S"="red" , "FI"="pink", "C"="forest green", "KD"="purple", "L"="skyblue", 
              "M"="darkblue", "SD"="gold", "Uncertain"="grey", "Rödgröna"="red","Alliansen"="orange", "Other"="grey")
@@ -70,7 +77,6 @@ block_col<-c("Rödgröna"="red","Alliansen"="orange", "SD"="gold", "Other"="grey
 
 txt_parties<-as.character(unique(polldata$Party))
 txt_houses<-as.character(unique(polldata$house))
-
 
 #################  SET DASHBOARD UI  ########################
 
@@ -86,6 +92,7 @@ ui <- dashboardPage(
                   selected="Parti"),
       menuItem("Opinionen per månad", tabName = "polls_hist", icon = icon("line-chart")),
       menuItem("Opinion vs. valresultat", tabName="polls_dev_election", icon=icon("exchange")),
+      menuItem("Institut vs. valresultat", tabName="institut_dev_election"),
       menuItem("Koalitioner över tid", tabName="coal_hist", icon=icon("area-chart")),
       menuItem("Simulering av koalitionsmöjligheter", tabName = "koalitionsalternativ", icon = icon("pie-chart")),
       menuItem("Information", tabName="info_raw", icon=icon("info"))
@@ -96,25 +103,22 @@ ui <- dashboardPage(
   dashboardBody(
   tabItems(
     
+    # Tab 1: Polls_Hist
     tabItem(tabName = "polls_hist",
       h2("Opinionen per månad"),
-      h4("Medelvärde av opinionsundersökningar, grupperad per publiceringsmånad"),
       fluidRow(
-          column(5, 
+          box(title="Partier att inkludera", width=2, status="primary", 
                   checkboxGroupInput(inputId = "parties", inline=TRUE, label="Partier att inkludera i grafen", choices=txt_parties, 
-                             selected=txt_parties)),
-          column(3, 
+                             selected=txt_parties),
                  checkboxInput('all_party', 'Alla partier / Inga partier', value=TRUE)),
-          column(3,
+          box(title="Opinionsinstitut att inkludera", width=2, status="primary",  
+                 checkboxGroupInput(inputId = "houses", inline=TRUE, label="Opinionsinstitut att inkludera i grafen", choices=txt_houses, 
+                                    selected=txt_houses), 
+                 checkboxInput('all_houses', 'Alla institut / Inga institut', value=TRUE)),
+          column(6,
                  selectInput("startmonthpolls", "Tidsperiod från:", unique(polldata$PublYearMonth),
                                                                           selected="2005-01-01"))
       ),
-      fluidRow(
-        column(5, 
-               checkboxGroupInput(inputId = "houses", inline=TRUE, label="Opinionsinstitut att inkludera i grafen", choices=txt_houses, 
-                                   selected=txt_houses)),
-        column(3, 
-               checkboxInput('all_houses', 'Alla institut / Inga institut', value=TRUE))),
       fluidRow(
         column(9, 
                plotOutput(outputId = "party_monthly_mean")),
@@ -124,34 +128,40 @@ ui <- dashboardPage(
       )
       ),
     
+    # Tab 2: polls_Dev_election
     tabItem(tabName = "polls_dev_election", 
             h2("Opinion vs. valresultat"),
+            fluidRow(plotOutput(outputId = "polls_deviation"))
+    ),
+    
+    # Tab 3: institut_dev_election
+    tabItem(tabName = "institut_dev_election", 
+            h2("Institut vs. valresultat"),
             h3("Analys av skillnaden mellan opinionsundersökningar vid en vald tidpunkt innan valet, och det faktiska valresultatet"),
             h3("Positiva värden betyder att partiets valresultat var högre än opinionsundersökningarna visade vid valt antal månader före valet"),
             fluidRow(
-              column(3,
-                      selectInput("month_bf_elect", "Månader före valet:", unique(polldata$MonthBeforeElection),
-                                                                              selected=4))
+              column(6, 
+                     selectInput("month_bf_elect", "Månader innan val", c(1:6), 
+                                 selected=2)),
+              column(6,
+                     selectInput("year_poll_elect", "År", unique(polldata$ElectionYear),
+                                 selected=2014))
               ),
             fluidRow(
-              plotOutput(outputId = "polls_deviation")),
-            h3(""),
-            fluidRow(
-              column(5, 
+              column(6,
                      plotOutput(outputId = "polls_deviation_houses")),
-              column(2,
-                     selectInput("year_poll_elect", "År", unique(polldata$ElectionYear),
-                                                                selected=2014)),
-              column(7, 
+              column(6, 
                      plotOutput(outputId = "polls_deviation_houses_year")))
     ),
     
+    # Tab 4: coal_hist
     tabItem(tabName="coal_hist",
             h2("Koalitioner över tid"),
             fluidRow(checkboxGroupInput(inputId = "parties_coalition", inline=TRUE, label="Välj partier att summera", choices=txt_parties)),
             fluidRow(plotOutput(outputId = "coalitions_monthly"))
     ),
   
+    # Tab 5: koalitionsalternativ
     tabItem(tabName="koalitionsalternativ",
             h2("Simulering av koalitionsalternativ"),
             h3("Fördelningen använder värdena i sliders. Dessa kan ändras för att simulera alternativa scenarios."),
@@ -184,6 +194,7 @@ ui <- dashboardPage(
   
   ),
   
+  # Tab 6: info_raw
   tabItem(tabName = "info_raw", 
           h2("Översikt över inkluderade opinionsinstitut, och vilka månader de utkommit med opinionsdata "),
           h3("Orange = klassiska undersökningar (slumpvis), blå=Internet-undersökningar (självrekryterade)"),
@@ -208,20 +219,21 @@ server <- function(input, output,session) {
   
   observe({
   
+    # Button for check / uncheck all parties
     updateCheckboxGroupInput(
     session, 'parties', choices = txt_parties, inline=TRUE,
     selected = if (input$all_party) txt_parties)
   
-    
+    # Button for check / uncheck all houses
     updateCheckboxGroupInput(
       session, 'houses', choices = txt_houses, inline=TRUE,
       selected = if (input$all_houses) txt_houses)
     
-    
+    # Get latest available month in data
     monthly_avg_recent<- polldata_monthly_avg() %>%
     filter(PublYearMonth==input$startmonth)
     
-    
+    # Set startvalues for sliderinput (on tab 5) to the average value from the latest reporting month 
     updateSliderInput(
       session, "slider_S", value=monthly_avg_recent[which(monthly_avg_recent$Party=="S"),]$Percentage,
       min=2,max=35,step=0.1)
@@ -230,9 +242,6 @@ server <- function(input, output,session) {
       min=2,max=35,step=0.1)
     updateSliderInput(
       session, "slider_V", value=monthly_avg_recent[which(monthly_avg_recent$Party=="V"),]$Percentage,
-      min=2,max=35,step=0.1)
-    updateSliderInput(
-      session, "slider_FI", value=monthly_avg_recent[which(monthly_avg_recent$Party=="FI"),]$Percentage,
       min=2,max=35,step=0.1)
     updateSliderInput(
       session, "slider_M", value=monthly_avg_recent[which(monthly_avg_recent$Party=="M"),]$Percentage,
@@ -252,8 +261,7 @@ server <- function(input, output,session) {
     
     })
 
-  # Create reactive dataframes
-  
+  # Create reactive dataframes - entire data is filtered when selecting polltypes
   polldata_monthly_avg <- reactive({
     polldata %>% 
       filter(type %in% input$polltypes & !is.na(Percentage)) %>%
@@ -275,12 +283,12 @@ server <- function(input, output,session) {
              DiffElection_sign=ifelse(DiffElection>=0, "pos", "neg"))
   })
   
+  # Reactive textframe
   text_coal<- reactive({
-    
     paste("Koalition av ",paste(input$parties_coalition, sep="+"))
   })
   
-  # DataFrame connected to sliders
+  # DataFrame connected to sliders on tab5
   coalitions_sliders<-reactive({
     data.frame(Party=c("S", "MP", "V", "M", "C", "L", "KD", "SD"), 
                Percentage=c(input$slider_S, input$slider_MP, input$slider_V, 
@@ -298,10 +306,11 @@ server <- function(input, output,session) {
       filter(Percentage>=4)
   })
 
+  
   # Tab 1 Plot 1: Parties over time
   output$party_monthly_mean <- renderPlot({
     
-    p<- if (input$party_or_block=="Parti")
+    p<- if (input$party_or_block=="Parti") # Depending on choice: Show Party or coalition of parties
     {    
               polldata %>%
              filter(!is.na(Percentage) & Party %in% input$parties & PublYearMonth>=input$startmonthpolls &
@@ -321,6 +330,7 @@ server <- function(input, output,session) {
         stat_summary(fun.y=sum, geom="line", size=1)
     }
 
+    # Add features to plot
     p+geom_hline(yintercept=4, color="black", linetype=2)+
       theme(text = element_text(size=14),
       axis.text.x = element_text(angle = 90, hjust = 1))+
@@ -350,32 +360,24 @@ server <- function(input, output,session) {
   # Tab 2 Plot 1: Deviations from elect result
   output$polls_deviation <- renderPlot({
     
-    p<-if (input$party_or_block=="Parti") {
-    
-    polldata_monthly_avg() %>%
-    filter(MonthBeforeElection==input$month_bf_elect)%>%
-    ggplot(aes(x=as.factor(ElectionYear), y=DiffElection, fill=DiffElection_sign, label=round(DiffElection,1)))+
-    geom_col()+
-    facet_grid(.~Party) 
-    
-    } else {
-      polldata_monthly_avg_block() %>%
-        filter(MonthBeforeElection==input$month_bf_elect)%>%
-        ggplot(aes(x=as.factor(ElectionYear), y=DiffElection, fill=DiffElection_sign, label=round(DiffElection,1)))+
-        geom_col()+
-        facet_grid(.~block) 
-    }
-    
-    p+geom_text(fill="white", color="black")+
-      scale_fill_manual(values=c("pos"="green", "neg"="red"))+
-      theme(text = element_text(size=16),
-            legend.position = "none",
-            strip.text.y = element_text(angle = 360, face="bold"),
-            strip.text.x = element_text(face="bold"),
-            strip.placement = "outside")+
-      ggtitle("Avvikelse från valresultatet i procentenheter")+
-      labs(x = "Valår")
-  })
+    polldata_monthly_avg() %>% 
+      filter(MonthBeforeElection<=6) %>%
+      ggplot(aes(x=MonthBeforeElection, y=DiffElection, 
+                 color=as.factor(ElectionYear), group=as.factor(ElectionYear), label=round(DiffElection,1)))+
+              facet_wrap(~Party, ncol=4, nrow=2) +
+              geom_line(size=2)+
+              geom_text(fill="white", color="black", size=6)+
+              scale_fill_manual(values=c("pos"="green", "neg"="red"))+
+              theme(text = element_text(size=20),
+                    legend.title=element_blank(),
+                    strip.text.y = element_text(angle = 360, face="bold"),
+                    strip.text.x = element_text(face="bold"),
+                    strip.placement = "outside")+
+              geom_hline(yintercept =0)+
+              scale_x_reverse() + 
+              ggtitle("Avvikelse från valresultatet i procentenheter")+
+              labs(x = "Månader innan val")
+  }, height=800)
   
   #Tab2 Plot 2: Deviation per house (total over all parties) 
   output$polls_deviation_houses <- renderPlot({
@@ -399,7 +401,7 @@ server <- function(input, output,session) {
             
   })
   
-  #Tab2 Plot 3: Deviation per house (total over all parties) 
+  #Tab3 Plot 1: Deviation from election monthly before election (total average over all houses) 
   output$polls_deviation_houses_year <- renderPlot({
     
     polldata %>% 
@@ -416,7 +418,7 @@ server <- function(input, output,session) {
     
   })
   
-  #Tab3: Kombination over time
+  #Tab4: Coalitions over time
   output$coalitions_monthly <-renderPlot({
     
     filter(polldata, Party %in% input$parties_coalition & type %in% input$polltypes & !is.na(Percentage)) %>%
@@ -429,7 +431,7 @@ server <- function(input, output,session) {
            y= "Procent")
   })
   
-  # Tab 4: Bar chart with block combinations
+  # Tab 5: Bar chart with block combinations
   output$block_combination<- renderPlot({
     
    act_values<-data.frame(Percentage=c(input$slider_S, input$slider_MP, input$slider_V, 
@@ -451,7 +453,7 @@ server <- function(input, output,session) {
     
   })
   
-  # Tab 5: Overview all poll institutes
+  # Tab 6: Overview all poll institutes
   output$overview_polls<-renderPlot({
     
     overview_houses %>%
@@ -470,6 +472,7 @@ server <- function(input, output,session) {
   }
   )
  
+  # Tab 6: Table with all data
   output$tbl_raw <-renderTable({
     polls %>% 
       filter(as.Date(PublDate)>=input$startmonthtbl)
