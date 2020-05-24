@@ -301,7 +301,7 @@ server <- function(input, output,session) {
       scale_fill_manual(values=party_col) + 
       scale_alpha_manual(values = c(0.3, 1)) + 
       theme(legend.position = "none",
-            text = element_text(size=20),
+            text = element_text(size=16),
             axis.title.x=element_blank(),
             axis.title.y=element_blank(),
             axis.text.x=element_blank(),
@@ -340,7 +340,7 @@ server <- function(input, output,session) {
     # Add features to plot
     p+geom_hline(yintercept=4, color="black", linetype=2)+
       theme(
-        text = element_text(size=20),
+        text = element_text(size=16),
         axis.title.x=element_blank(),
         axis.title.y=element_blank()
         )+ 
